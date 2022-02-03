@@ -1,6 +1,8 @@
 #include <WiFi.h>
 #include "AiEsp32RotaryEncoder.h"
 #include "Arduino.h"
+#include <AceButton.h>
+using namespace ace_button;
 
 // Wifi
 const char *ssid = "FRITZ!Box 7560 RU";
@@ -19,17 +21,31 @@ IPAddress server(192, 168, 0, 52); // numeric IP for  Ui24  (no DNS)
 
 AiEsp32RotaryEncoder rotaryEncoder = AiEsp32RotaryEncoder(ROTARY_ENCODER_A_PIN, ROTARY_ENCODER_B_PIN, ROTARY_ENCODER_BUTTON_PIN, ROTARY_ENCODER_VCC_PIN, ROTARY_ENCODER_STEPS);
 
-//Add some pins to test (making sure they are not used with the shield)
-int inPin = 9;  // pushbutton connected to digital pin 7
-int val = 0;    // variable to store the read value
-int oldval = 0; //variable to store old val
+
+const byte numChars = 512;
+char receivedChars[numChars];
+boolean newData = false;
+
 
 WiFiClient client;
-
 // Variables to measure the speed
 unsigned long beginMicros, endMicros;
 unsigned long byteCount = 0;
-bool printWebData = true; // set to false for better speed measurement
+bool printWebData = false; // set to false for better speed measurement
+
+// ACE BUTTON
+const int BUTTON_PIN1 = 12;
+const int BUTTON_PIN2 = 14;
+const int BUTTON_PIN3 = 27;
+const int BUTTON_PIN4 = 26; //Keine Funktion
+
+AceButton button1(BUTTON_PIN1);
+AceButton button2(BUTTON_PIN2);
+AceButton button3(BUTTON_PIN3);
+
+
+// Forward reference to prevent Arduino compiler becoming confused.
+void handleEvent(AceButton*, uint8_t, uint8_t);
 
 void rotary_onButtonClick()
 {
@@ -97,7 +113,21 @@ void setup()
     rotaryEncoder.setAcceleration(100); //or set the value - larger number = more accelearation; 0 or 1 means disabled acceleration
 
     // Setup the pin to read
-    pinMode(inPin, INPUT_PULLUP); // sets the digital pin 7 as input
+    pinMode(BUTTON_PIN1, INPUT_PULLUP);
+    pinMode(BUTTON_PIN2, INPUT_PULLUP);
+    pinMode(BUTTON_PIN3, INPUT_PULLUP);
+    
+
+   // Configure the ButtonConfig with the event handler, and enable all higher
+  // level events.
+  ButtonConfig* buttonConfig = ButtonConfig::getSystemButtonConfig();
+  buttonConfig->setEventHandler(handleEvent);
+  buttonConfig->setFeature(ButtonConfig::kFeatureClick);
+  buttonConfig->setFeature(ButtonConfig::kFeatureDoubleClick);
+  buttonConfig->setFeature(ButtonConfig::kFeatureLongPress);
+  buttonConfig->setFeature(ButtonConfig::kFeatureRepeatPress); 
+
+    
 
     connectWifi();
     connectServer();
@@ -105,37 +135,117 @@ void setup()
     beginMicros = micros();
 }
 
-void loop()
-{
-  
-    //in loop call your custom function which will process rotary encoder values
-    rotary_loop();
+// The event handler for both buttons.
+void handleEvent(AceButton* button, uint8_t eventType, uint8_t buttonState) {
 
-       
-    String bufferArray[512];
-    int i = 0;
-    
-    
-    if (client.available() > 0)
-  {
-    //read back one line from the server
-    String line = client.readStringUntil('\r');
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.println(line);
+  // Print out a message for all events, for both buttons.
+  Serial.print(F("handleEvent(): pin: "));
+  Serial.print(button->getPin());
+  Serial.print(F("; eventType: "));
+  Serial.print(eventType);
+  Serial.print(F("; buttonState: "));
+  Serial.println(buttonState);
 
-    i++;
- 
+  // Control the LED only for the Pressed and Released events of Button 1.
+  // Notice that if the MCU is rebooted while the button is pressed down, no
+  // event is triggered and the LED remains off.
+  switch (eventType) {
+    case AceButton::kEventPressed:
+      if (button->getPin() == BUTTON_PIN1) {
+         client.println("SETD^i.0.mute^0") ;
+         client.println("SETD^i.1.mute^0") ;
+         client.println("SETD^i.2.mute^1") ;
+         client.println("SETD^i.3.mute^1") ;
+         client.println("SETD^i.4.mute^1") ;
+         client.println("SETD^i.5.mute^1") ;
+         client.println("SETD^i.6.mute^1") ;
+         client.println("SETD^i.7.mute^1") ;
+      }
+      else if(button->getPin() == BUTTON_PIN2){
+         client.println("SETD^i.0.mute^1") ;
+         client.println("SETD^i.1.mute^1") ;
+         client.println("SETD^i.2.mute^0") ;
+         client.println("SETD^i.3.mute^0") ;
+         client.println("SETD^i.4.mute^1") ;
+         client.println("SETD^i.5.mute^1") ;
+         client.println("SETD^i.6.mute^1") ;
+         client.println("SETD^i.7.mute^1") ;
+      }
+       else if(button->getPin() == BUTTON_PIN3){
+         client.println("SETD^i.0.mute^1") ;
+         client.println("SETD^i.1.mute^1") ;
+         client.println("SETD^i.2.mute^1") ;
+         client.println("SETD^i.3.mute^1") ;
+         client.println("SETD^i.4.mute^0") ;
+         client.println("SETD^i.5.mute^0") ;
+         client.println("SETD^i.6.mute^1") ;
+         client.println("SETD^i.7.mute^1") ;
+      }
+      break;
+    case AceButton::kEventReleased:
+      if (button->getPin() == BUTTON_PIN1) {
+        //digitalWrite(LED_PIN, LED_OFF);
+      }
+      break;
+    case AceButton::kEventClicked:
+      if (button->getPin() == BUTTON_PIN2) {
+        Serial.println(F("Button 2 clicked!"));
+      } else if (button->getPin() == BUTTON_PIN3) {
+        Serial.println(F("Button 3 clicked!"));
+      }
+      break;
   }
- //Serial.println(bufferArray[200]);           
- 
-    
-  String wantedVal = "SETD^m.mix^0";
-  
+}
+void recvWithEndMarker(){
+  static byte ndx = 0;
+  char endMarker = '^';
+  char rc;
 
+  while(client.available() > 0 ) { //&& newData == false
+    rc = client.read();
+
+    if (rc != endMarker) {
+      receivedChars[ndx] = rc;
+      Serial.println(rc + "  " + ndx );
+      ndx++;
+      if (ndx >= numChars){
+        ndx = numChars -1;
+      }
+     }
+     else {
+       //receivedChars[ndx] = '\0';
+       //ndx = 0;
+       newData = true;
+      }
+            
+    
+  }
+  if (newData == true){
+    Serial.println(receivedChars);
+    newData = false;
+    ndx = 0;
+  }
+}
+
+void readChar(){
+    
+  if(client.available() > 0){
+  //Serial.println("Reading incoming data as chars");
+  
+  int len = client.available();
+  byte buffer[512];
+  if (len > 0) {
+     if (len > 512) len = 512;
+     client.read(buffer, len);
+  }
+  if (printWebData) {
+      Serial.write(buffer, len); // show in the serial monitor (slows some boards)
+    }
+  
     // if the server's disconnected, stop the client:
     if (!client.connected())
-    {
+    { 
+      
         endMicros = micros();
         Serial.println();
         Serial.println("disconnecting.");
@@ -147,19 +257,53 @@ void loop()
             delay(1);
         }
     }
-
+      
     
-    //read the pins we need here
-    // val = digitalRead(inPin); // read the input pin
-    if (oldval != val)
-    { //check if the value is the same, we don't want multiple sends
-        Serial.println(val);
-        oldval = val; // Make the old value same as the new value
-        if (val == 1)
-            client.println("SETD^i.0.mute^1"); // Send SETD Mute with NEW LINE
-        if (val == 0)
-            client.println("SETD^i.0.mute^0");
+    byteCount = byteCount + len;
+  }
+}
+
+void readStrinG(){
+      if (client.available() > 0)
+  {
+    //read back one line from the server
+    String line = client.readStringUntil('^');
+   Serial.println(line);
+    
+    if (line == "i.0.aux.0.pan"){
+      Serial.println(line);
+      Serial.println(line.length());
     }
+    else {
+   // Serial.print("no    ");
+   // Serial.println(line);
+    }
+    
+    //client.println(line);
+   
+  
+ 
+  }
+          
+
+}
+void loop()
+{
+  
+    //in loop call your custom function which will process rotary encoder values
+    rotary_loop();
+
+    readChar();
+    //readStrinG();
+    //recvWithEndMarker();
+
+      // Should be called every 4-5ms or faster, for the default debouncing time
+  // of ~20ms.
+  button1.check();
+  button2.check();
+  button3.check();
+    
+   
 }
 
 
@@ -200,3 +344,21 @@ void connectServer()
         Serial.println("connection failed");
     }
 }
+
+/*
+String split(String s, char parser, int index) {
+  String rs = "";
+  int parserIndex = index;
+  int parserCnt = 0;
+  int rFromIndex = 0, rToIndex = -1;
+  while (index >= parserCnt) {
+    rFromIndex = rToIndex + 1;
+    rToIndex = s.indexOf(parser, rFromIndex);
+    if (index == parserCnt) {
+      if (rToIndex == 0 || rToIndex == -1) return "";
+      return s.substring(rFromIndex, rToIndex);
+    } else parserCnt++;
+  }
+  return rs;
+}
+*/
