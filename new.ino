@@ -12,13 +12,14 @@ const char *password = "76265768296795384496";
 IPAddress server(192, 168, 0, 52); // numeric IP for  Ui24  (no DNS)
 
 // Define Rotary Encoder Pins
-#define ROTARY_ENCODER_A_PIN 32
-#define ROTARY_ENCODER_B_PIN 33
+#define ROTARY_ENCODER_A_PIN 33
+#define ROTARY_ENCODER_B_PIN 32
 #define ROTARY_ENCODER_BUTTON_PIN 25
 #define ROTARY_ENCODER_VCC_PIN -1 /* 27 put -1 of Rotary encoder Vcc is connected directly to 3,3V; else you can use declared output pin for powering rotary encoder */
 
 #define ROTARY_ENCODER_STEPS 4
 
+float encoderValue = 0.3;
 AiEsp32RotaryEncoder rotaryEncoder = AiEsp32RotaryEncoder(ROTARY_ENCODER_A_PIN, ROTARY_ENCODER_B_PIN, ROTARY_ENCODER_BUTTON_PIN, ROTARY_ENCODER_VCC_PIN, ROTARY_ENCODER_STEPS);
 
 
@@ -34,9 +35,9 @@ unsigned long byteCount = 0;
 bool printWebData = false; // set to false for better speed measurement
 
 // ACE BUTTON
-const int BUTTON_PIN1 = 12;
+const int BUTTON_PIN1 = 27;
 const int BUTTON_PIN2 = 14;
-const int BUTTON_PIN3 = 27;
+const int BUTTON_PIN3 = 12;
 const int BUTTON_PIN4 = 26; //Keine Funktion
 
 AceButton button1(BUTTON_PIN1);
@@ -68,7 +69,7 @@ void rotary_loop()
     {
         Serial.print("Value: ");
         Serial.println(rotaryEncoder.readEncoder());
-        float encoderValue = rotaryEncoder.readEncoder();
+        encoderValue = rotaryEncoder.readEncoder();
         encoderValue = encoderValue/100;
         Serial.println(encoderValue);
         client.print("SETD^m.mix^");
@@ -126,9 +127,7 @@ void setup()
   buttonConfig->setFeature(ButtonConfig::kFeatureDoubleClick);
   buttonConfig->setFeature(ButtonConfig::kFeatureLongPress);
   buttonConfig->setFeature(ButtonConfig::kFeatureRepeatPress); 
-
-    
-
+  
     connectWifi();
     connectServer();
 
@@ -196,6 +195,7 @@ void handleEvent(AceButton* button, uint8_t eventType, uint8_t buttonState) {
       break;
   }
 }
+/*
 void recvWithEndMarker(){
   static byte ndx = 0;
   char endMarker = '^';
@@ -226,7 +226,7 @@ void recvWithEndMarker(){
     ndx = 0;
   }
 }
-
+*/
 void readChar(){
     
   if(client.available() > 0){
@@ -278,13 +278,8 @@ void readStrinG(){
    // Serial.print("no    ");
    // Serial.println(line);
     }
-    
-    //client.println(line);
-   
-  
  
   }
-          
 
 }
 void loop()
@@ -302,10 +297,7 @@ void loop()
   button1.check();
   button2.check();
   button3.check();
-    
-   
 }
-
 
 void connectWifi()
 {
@@ -329,7 +321,7 @@ void connectServer()
     // if you get a connection, report back via serial:
     if (client.connect(server, 80))
     {
-        Serial.print("connected to ");
+        Serial.print("connected to Soundcraft UI at: ");
         Serial.println(client.remoteIP());
         // Make a HTTP request:
 
@@ -344,21 +336,3 @@ void connectServer()
         Serial.println("connection failed");
     }
 }
-
-/*
-String split(String s, char parser, int index) {
-  String rs = "";
-  int parserIndex = index;
-  int parserCnt = 0;
-  int rFromIndex = 0, rToIndex = -1;
-  while (index >= parserCnt) {
-    rFromIndex = rToIndex + 1;
-    rToIndex = s.indexOf(parser, rFromIndex);
-    if (index == parserCnt) {
-      if (rToIndex == 0 || rToIndex == -1) return "";
-      return s.substring(rFromIndex, rToIndex);
-    } else parserCnt++;
-  }
-  return rs;
-}
-*/
